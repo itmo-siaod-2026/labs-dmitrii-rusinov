@@ -1,0 +1,90 @@
+plugins {
+    id 'application'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.junit.jupiter
+
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.openjdk.jmh:jmh-core:1.37'
+    testAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
+
+
+    implementation libs.guava
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+application {
+    mainClass = 'com.ruskaof.App'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+def registerJmhTask = { String taskName, String benchName, String descriptionText, List<String> includePatterns, boolean withJfr ->
+    tasks.register(taskName, JavaExec) {
+        group = 'benchmark'
+        description = descriptionText
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = 'org.openjdk.jmh.Main'
+
+        File benchDir = rootProject.file("bench/${benchName}")
+        File csvFile = new File(benchDir, "jmh-${benchName}.csv")
+        File jfrDir = new File(benchDir, 'jfr')
+
+        doFirst {
+            benchDir.mkdirs()
+            if (withJfr) {
+                jfrDir.mkdirs()
+                args = includePatterns + ['-prof', "jfr:dir=../bench/${benchName}/jfr"]
+            } else {
+                args = includePatterns + ['-rf', 'csv', '-rff', csvFile.absolutePath]
+            }
+        }
+    }
+}
+
+def jmhAllIncludes = ['com.ruskaof.algorithm.hash.ExtendibleHashTableBenchmark.*',
+                      'com.ruskaof.algorithm.hash.ExtendibleHashTableLargeTableGetBenchmark.*',
+                      'com.ruskaof.algorithm.hash.PerfectHashBenchmark.*',
+                      'com.ruskaof.algorithm.hash.PerfectHashLargeTableGetBenchmark.*',
+                      'com.ruskaof.algorithm.hash.LshHashTableBenchmark.*',
+                      'com.ruskaof.algorithm.geoloc.KdTree2DBenchmark.*',
+                      'com.ruskaof.algorithm.geoloc.Knn2DBenchmark.*']
+def jmhExtendibleIncludes = ['com.ruskaof.algorithm.hash.ExtendibleHashTableBenchmark.*',
+                             'com.ruskaof.algorithm.hash.ExtendibleHashTableLargeTableGetBenchmark.*']
+def jmhPerfectIncludes = ['com.ruskaof.algorithm.hash.PerfectHashBenchmark.*',
+                          'com.ruskaof.algorithm.hash.PerfectHashLargeTableGetBenchmark.*']
+def jmhLshIncludes = ['com.ruskaof.algorithm.hash.LshHashTableBenchmark.*']
+def jmhGeolocIncludes = ['com.ruskaof.algorithm.geoloc.KdTree2DBenchmark.*',
+                         'com.ruskaof.algorithm.geoloc.Knn2DBenchmark.*']
+def jmhLargeTableGetIncludes = ['com.ruskaof.algorithm.hash.PerfectHashLargeTableGetBenchmark.*',
+                                'com.ruskaof.algorithm.hash.ExtendibleHashTableLargeTableGetBenchmark.*']
+
+registerJmhTask('jmh_csv', 'all', 'Run all JMH benchmarks (CSV)', jmhAllIncludes, false)
+registerJmhTask('jmh_jfr', 'all', 'Run all JMH benchmarks (JFR)', jmhAllIncludes, true)
+
+registerJmhTask('jmh_extendible_csv', 'extendible', 'Run ExtendibleHashTable JMH benchmarks (CSV)', jmhExtendibleIncludes, false)
+registerJmhTask('jmh_extendible_jfr', 'extendible', 'Run ExtendibleHashTable JMH benchmarks (JFR)', jmhExtendibleIncludes, true)
+
+registerJmhTask('jmh_perfect_csv', 'perfect', 'Run PerfectHash JMH benchmarks (CSV)', jmhPerfectIncludes, false)
+registerJmhTask('jmh_perfect_jfr', 'perfect', 'Run PerfectHash JMH benchmarks (JFR)', jmhPerfectIncludes, true)
+
+registerJmhTask('jmh_lsh_csv', 'lsh', 'Run LshHashTable JMH benchmarks (CSV)', jmhLshIncludes, false)
+registerJmhTask('jmh_lsh_jfr', 'lsh', 'Run LshHashTable JMH benchmarks (JFR)', jmhLshIncludes, true)
+
+registerJmhTask('jmh_geoloc_csv', 'geoloc', 'Run geoloc JMH benchmarks (CSV)', jmhGeolocIncludes, false)
+registerJmhTask('jmh_geoloc_jfr', 'geoloc', 'Run geoloc JMH benchmarks (JFR)', jmhGeolocIncludes, true)
+
+registerJmhTask('jmh_large_table_get_csv', 'large-table-get', 'Run large-table key-pool get JMH benchmarks (CSV)', jmhLargeTableGetIncludes, false)
+registerJmhTask('jmh_large_table_get_jfr', 'large-table-get', 'Run large-table key-pool get JMH benchmarks (JFR)', jmhLargeTableGetIncludes, true)
