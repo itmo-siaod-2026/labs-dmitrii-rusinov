@@ -1,5 +1,9 @@
 package org.example;
 
+import java.util.AbstractMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.atomic.LongAdder;
@@ -8,11 +12,10 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.BiFunction;
 
-public class CustomHashMap<K, V> {
+public class CustomHashMap<K, V> implements Iterable<Map.Entry<K, V>> {
 
     private static final int DEFAULT_CAPACITY = 16;
-    private static final float LOAD_FACTOR = 0.75f;
-    private static final int LOCKS_COUNT = 16;
+    private static final int LOCKS_COUNT = 30;
 
     private volatile AtomicReferenceArray<Node<K, V>> table;
     private final LongAdder size = new LongAdder();
@@ -143,10 +146,10 @@ public class CustomHashMap<K, V> {
     }
 
     private void maybeGrow() {
-        if (size.sum() < (long) (table.length() * LOAD_FACTOR))
+        if (size.sum() < (long) (table.length() * 0.5))
             return;
         try (Lease ignored = new Lease(tableLock.writeLock())) {
-            if (size.sum() < (long) (table.length() * LOAD_FACTOR))
+            if (size.sum() < (long) (table.length() * 0.5))
                 return;
             final AtomicReferenceArray<Node<K, V>> old = table;
             final int newCap = old.length() * 2;
@@ -181,5 +184,40 @@ public class CustomHashMap<K, V> {
         while (p < n)
             p <<= 1;
         return p;
+    }
+
+    @Override
+    public Iterator<Map.Entry<K, V>> iterator() {
+        return new EntryIterator(table);
+    }
+
+    private final class EntryIterator implements Iterator<Map.Entry<K, V>> {
+        private final AtomicReferenceArray<Node<K, V>> snapshot;
+        private int bucketIndex;
+        private Node<K, V> next;
+
+        EntryIterator(AtomicReferenceArray<Node<K, V>> snapshot) {
+            this.snapshot = snapshot;
+            advance();
+        }
+
+        private void advance() {
+            while (next == null && bucketIndex < snapshot.length())
+                next = snapshot.get(bucketIndex++);
+        }
+
+        @Override
+        public boolean hasNext() {
+            return next != null;
+        }
+
+        @Override
+        public Map.Entry<K, V> next() {
+            if (next == null) throw new NoSuchElementException();
+            final Node<K, V> e = next;
+            next = e.next;
+            if (next == null) advance();
+            return new AbstractMap.SimpleImmutableEntry<>(e.key, e.value);
+        }
     }
 }
