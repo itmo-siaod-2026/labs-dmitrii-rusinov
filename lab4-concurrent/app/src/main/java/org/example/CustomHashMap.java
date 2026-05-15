@@ -74,7 +74,7 @@ public class CustomHashMap<K, V> implements Iterable<Map.Entry<K, V>> {
     }
 
     public V get(K key) {
-        final int hash = spread(key);
+        final int hash = calc_hash(key);
         final AtomicReferenceArray<Node<K, V>> t = table;
         for (Node<K, V> e = t.get(bucketIndex(hash, t.length())); e != null; e = e.next) {
             if (e.hash == hash && Objects.equals(e.key, key))
@@ -84,7 +84,7 @@ public class CustomHashMap<K, V> implements Iterable<Map.Entry<K, V>> {
     }
 
     public V put(K key, V value) {
-        final int hash = spread(key);
+        final int hash = calc_hash(key);
         final V previous;
         try (Lease ignored = bucketLease(hash)) {
             previous = insertOrUpdate(hash, key, value);
@@ -94,7 +94,7 @@ public class CustomHashMap<K, V> implements Iterable<Map.Entry<K, V>> {
     }
 
     public V merge(K key, V value, BiFunction<? super V, ? super V, ? extends V> remappingFunction) {
-        final int hash = spread(key);
+        final int hash = calc_hash(key);
         final V result;
         try (Lease ignored = bucketLease(hash)) {
             result = mergeUnderLock(hash, key, value, remappingFunction);
@@ -168,7 +168,7 @@ public class CustomHashMap<K, V> implements Iterable<Map.Entry<K, V>> {
         return new Lease(tableLock.readLock(), perBucketLocks[hash & (LOCKS_COUNT - 1)]);
     }
 
-    private static int spread(Object key) {
+    private static int calc_hash(Object key) {
         if (key == null)
             return 0;
         final int h = key.hashCode();
